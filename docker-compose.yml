@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # 1. Cơ sở dữ liệu MySQL 8
+  mysql:
+    image: mysql:8.0
+    container_name: laptopweb-mysql
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_DATABASE: laptopweb
+      MYSQL_ROOT_PASSWORD: rootpassword123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword123"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - laptopweb-network
+
+  # 2. Spring Boot 3 Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: laptopweb-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/laptopweb?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Ho_Chi_Minh&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: rootpassword123
+      APP_JWT_SECRET: 9a3f2c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b
+      APP_SELLER_ZALO_PHONE: "0778333362"
+      FILE_UPLOAD_DIR: /app/uploads
+      SPRING_JACKSON_SERIALIZATION_FAIL_ON_EMPTY_BEANS: "false"
+    ports:
+      - "8080:8080"
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - laptopweb-network
+
+  # 3. Vue 3 + Nginx Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: laptopweb-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      - "5173:80"
+    networks:
+      - laptopweb-network
+
+volumes:
+  mysql_data:
+    name: laptopweb_mysql_data
+  uploads_data:
+    name: laptopweb_uploads_data
+
+networks:
+  laptopweb-network:
+    name: laptopweb_network
+    driver: bridge

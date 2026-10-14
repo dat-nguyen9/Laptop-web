@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: #141517;
+    --surface: #1E2024;
+    --surface-lift: #282B31;
+    --ink: #F7F7F8;
+    --muted: #8E929B;
+    --accent: #D72626;
+    --accent-ink: #FFFFFF;
+    --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  body {
+    font-family: 'Schibsted Grotesk', system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+    background-color: var(--bg);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+/* Custom Scrollbar - Flat Minimal */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #141517;
+}
+::-webkit-scrollbar-thumb {
+  background: #282B31;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3B3F47;
+}
+
+/* Buttons and Controls (Flat, intentional, no gradient) */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+.btn-primary:hover {
+  opacity: 0.92;
+}
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  background-color: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: background-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+}
+.btn-secondary:hover {
+  background-color: var(--surface-lift);
+}
+.btn-secondary:active {
+  transform: scale(0.98);
+}

@@ -1,0 +1,1 @@
+import{G as e}from"./index-D8YY5a1v.js";const o={createOrder(r){return e.post("/orders",r)},getMyOrders(){return e.get("/orders/my")},trackOrders(r){return e.get("/orders/track",{params:r})}};export{o};

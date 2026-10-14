@@ -1,0 +1,289 @@
+================================================================
+   KẾ HOẠCH XÂY DỰNG WEBSITE BÁN LAPTOP - LaptopWeb
+================================================================
+
+1. TỔNG QUAN DỰ ÁN
+-------------------
+Tên dự án  : LaptopWeb
+Mục tiêu   : Website thương mại điện tử bán laptop với đầy đủ
+             tính năng: tìm kiếm, giỏ hàng, liên hệ qua Zalo,
+             quản trị sản phẩm / đơn hàng / người dùng.
+Môi trường : Dev Local
+
+
+2. TECH STACK
+--------------
+  Backend  : Java 21 + Spring Boot 3
+             - Spring Web (REST API)
+             - Spring Security + JWT (xác thực)
+             - Spring Data JPA + Hibernate
+             - Maven (build tool)
+
+  Frontend : Vue.js 3 + Vite
+             - Vue Router 4
+             - Pinia (state management)
+             - Axios (gọi API)
+             - Tailwind CSS (styling)
+             - Shadcn-vue / PrimeVue (UI components)
+
+  Database : MySQL 8
+
+  Công cụ  : IntelliJ IDEA (backend), VS Code (frontend)
+             Postman (test API), DBeaver (quản lý DB)
+
+
+3. CẤU TRÚC DỰ ÁN
+-------------------
+LaptopWeb/
+├── backend/                        ← Spring Boot project
+│   ├── src/main/java/com/laptopweb/
+│   │   ├── controller/             ← REST Controllers
+│   │   │   ├── AuthController.java
+│   │   │   ├── ProductController.java
+│   │   │   ├── OrderController.java
+│   │   │   └── CategoryController.java
+│   │   ├── service/                ← Business Logic
+│   │   ├── repository/             ← JPA Repositories
+│   │   ├── entity/                 ← JPA Entities
+│   │   │   ├── User.java
+│   │   │   ├── Product.java
+│   │   │   ├── Category.java
+│   │   │   ├── Order.java
+│   │   │   └── OrderItem.java
+│   │   ├── dto/                    ← Request/Response DTOs
+│   │   ├── security/               ← JWT, SecurityConfig
+│   │   └── LaptopWebApplication.java
+│   ├── src/main/resources/
+│   │   └── application.properties  ← DB config, JWT secret
+│   └── pom.xml
+│
+└── frontend/                       ← Vue.js project
+    ├── src/
+    │   ├── views/
+    │   │   ├── HomeView.vue         ← Trang chủ
+    │   │   ├── ProductListView.vue  ← Danh sách sản phẩm
+    │   │   ├── ProductDetailView.vue← Chi tiết sản phẩm
+    │   │   ├── CartView.vue         ← Giỏ hàng
+    │   │   ├── OrderView.vue        ← Lịch sử đơn hàng
+    │   │   ├── LoginView.vue
+    │   │   └── admin/
+    │   │       ├── DashboardView.vue
+    │   │       ├── ProductManage.vue
+    │   │       └── OrderManage.vue
+    │   ├── components/
+    │   │   ├── layout/             ← Header, Footer, Sidebar
+    │   │   ├── product/            ← ProductCard, ProductGrid
+    │   │   └── cart/               ← CartItem, CartSummary
+    │   ├── stores/                 ← Pinia stores
+    │   │   ├── authStore.js
+    │   │   ├── cartStore.js
+    │   │   └── productStore.js
+    │   ├── router/index.js         ← Vue Router
+    │   ├── api/                    ← Axios instances
+    │   └── main.js
+    ├── index.html
+    └── vite.config.js
+
+
+4. DATABASE SCHEMA (MySQL)
+---------------------------
+
+  -- Người dùng
+  CREATE TABLE users (
+      id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+      email       VARCHAR(255) UNIQUE NOT NULL,
+      password    VARCHAR(255) NOT NULL,
+      full_name   VARCHAR(255),
+      phone       VARCHAR(20),
+      role        ENUM('CUSTOMER','ADMIN') DEFAULT 'CUSTOMER',
+      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  -- Danh mục
+  CREATE TABLE categories (
+      id    BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name  VARCHAR(255) NOT NULL,
+      slug  VARCHAR(255) UNIQUE NOT NULL
+  );
+
+  -- Sản phẩm
+  CREATE TABLE products (
+      id           BIGINT AUTO_INCREMENT PRIMARY KEY,
+      name         VARCHAR(500) NOT NULL,
+      slug         VARCHAR(500) UNIQUE NOT NULL,
+      description  TEXT,
+      price        DECIMAL(15,0) NOT NULL,
+      sale_price   DECIMAL(15,0),
+      stock        INT DEFAULT 0,
+      brand        VARCHAR(255),
+      images       TEXT,            -- lưu JSON array đường dẫn ảnh
+      specs        JSON,            -- RAM, CPU, GPU, Storage, Display
+      category_id  BIGINT,
+      created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (category_id) REFERENCES categories(id)
+  );
+
+  -- Đơn hàng
+  CREATE TABLE orders (
+      id             BIGINT AUTO_INCREMENT PRIMARY KEY,
+      user_id        BIGINT,
+      full_name      VARCHAR(255),
+      phone          VARCHAR(20),
+      address        TEXT,
+      note           TEXT,
+      total          DECIMAL(15,0),
+      status         ENUM('PENDING','CONFIRMED','SHIPPING',
+                          'DELIVERED','CANCELLED') DEFAULT 'PENDING',
+      created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
+  );
+
+  -- Chi tiết đơn hàng
+  CREATE TABLE order_items (
+      id          BIGINT AUTO_INCREMENT PRIMARY KEY,
+      order_id    BIGINT,
+      product_id  BIGINT,
+      quantity    INT,
+      price       DECIMAL(15,0),
+      FOREIGN KEY (order_id) REFERENCES orders(id),
+      FOREIGN KEY (product_id) REFERENCES products(id)
+  );
+
+
+5. API ENDPOINTS CHÍNH
+-----------------------
+  AUTH
+    POST   /api/auth/register       ← Đăng ký
+    POST   /api/auth/login          ← Đăng nhập, trả về JWT
+
+  PRODUCTS
+    GET    /api/products            ← Danh sách (filter, sort, page)
+    GET    /api/products/{slug}     ← Chi tiết sản phẩm
+    GET    /api/products/search     ← Tìm kiếm
+    POST   /api/admin/products      ← Thêm sản phẩm (Admin)
+    PUT    /api/admin/products/{id} ← Sửa sản phẩm (Admin)
+    DELETE /api/admin/products/{id} ← Xoá sản phẩm (Admin)
+
+  CATEGORIES
+    GET    /api/categories          ← Danh sách danh mục
+
+  ORDERS
+    POST   /api/orders              ← Đặt hàng
+    GET    /api/orders/my           ← Đơn hàng của tôi
+    GET    /api/admin/orders        ← Tất cả đơn (Admin)
+    PUT    /api/admin/orders/{id}   ← Cập nhật trạng thái (Admin)
+
+  USERS
+    GET    /api/admin/users         ← Danh sách người dùng (Admin)
+
+
+6. LUỒNG THANH TOÁN (Zalo)
+----------------------------
+  Thay vì tích hợp cổng thanh toán, khi khách đặt hàng:
+
+  Bước 1: Khách điền thông tin (tên, SĐT, địa chỉ) → Nhấn "Đặt hàng"
+  Bước 2: Hệ thống lưu đơn hàng vào DB với status = PENDING
+  Bước 3: Hiện popup xác nhận đơn hàng thành công + nút
+          "Liên hệ Zalo để thanh toán / xác nhận đơn"
+  Bước 4: Nút Zalo mở link: https://zalo.me/<SO_DIEN_THOAI_NGUOI_BAN>
+          (kèm message mặc định gồm mã đơn hàng)
+  Bước 5: Admin xác nhận qua Zalo → Cập nhật status đơn hàng
+
+  Link Zalo mẫu:
+  https://zalo.me/0xxxxxxxxx?text=Xin+chào,+tôi+vừa+đặt+đơn+hàng+%23{orderId}
+
+
+7. TÍNH NĂNG CHI TIẾT
+----------------------
+
+  [Khách hàng]
+  - Đăng ký / Đăng nhập bằng email + password
+  - Duyệt sản phẩm: filter theo hãng, CPU, RAM, giá
+  - Tìm kiếm laptop theo tên / thông số
+  - Xem chi tiết: ảnh, thông số kỹ thuật, mô tả
+  - Thêm vào giỏ hàng (lưu Pinia + localStorage)
+  - Đặt hàng + liên hệ xác nhận qua Zalo
+  - Xem lịch sử đơn hàng
+
+  [Quản trị - Admin]
+  - Dashboard: tổng doanh thu, đơn mới, số sản phẩm
+  - Quản lý sản phẩm: thêm, sửa, xoá, upload ảnh
+  - Quản lý danh mục
+  - Quản lý đơn hàng: xem, cập nhật trạng thái
+  - Quản lý người dùng
+
+
+8. LỘ TRÌNH PHÁT TRIỂN (6 TUẦN - LOCAL)
+-----------------------------------------
+
+  PHASE 1 - Setup & Core (Tuần 1) - [HOÀN THÀNH]
+  --------------------------------
+  [x] Khởi tạo Spring Boot project (Maven)
+  [x] Cấu hình MySQL + JPA + Hibernate
+  [x] Tạo entity: User, Product, Category, Order, OrderItem
+  [x] Cấu hình Spring Security + JWT
+  [x] API: Auth (register, login)
+  [x] Khởi tạo Vue.js 3 + Vite + Tailwind CSS
+  [x] Cấu hình Vue Router, Pinia, Axios
+  [x] Trang Login / Register
+
+  PHASE 2 - Shop Frontend (Tuần 2-3) - [HOÀN THÀNH]
+  ------------------------------------
+  [x] API: Lấy danh sách, chi tiết sản phẩm, filter đa chiều
+  [x] Trang chủ: banner, quyền lợi cam kết, thương hiệu, sản phẩm hot
+  [x] Trang danh sách: filter đa tiêu chí (Hãng, Giá, RAM, CPU), sắp xếp, phân trang
+  [x] Trang chi tiết: ảnh, bảng thông số kỹ thuật chi tiết, sản phẩm tương tự, tư vấn Zalo
+  [x] Tìm kiếm sản phẩm thông minh
+  [x] Giỏ hàng (Pinia store + localStorage)
+
+  PHASE 3 - Đặt Hàng & Zalo (Tuần 4) - [HOÀN THÀNH]
+  -------------------------------------
+  [x] Form đặt hàng (tên, SĐT, địa chỉ, ghi chú, validate SĐT 10 số)
+  [x] API: Tạo đơn hàng, lưu vào DB, trừ tồn kho, tính giá server-side
+  [x] Popup xác nhận đơn + nút Zalo + QR Code Zalo quét điện thoại + sao chép tin nhắn
+  [x] Trang lịch sử đơn hàng của khách + Tra cứu đơn công khai bằng SĐT / Mã đơn
+
+  PHASE 4 - Admin Panel (Tuần 5) - [HOÀN THÀNH]
+  --------------------------------
+  [x] Route guard Admin (kiểm tra role)
+  [x] Dashboard thống kê cơ bản
+  [x] CRUD sản phẩm + upload ảnh (lưu local /uploads)
+  [x] Quản lý danh mục
+  [x] Quản lý đơn hàng (cập nhật trạng thái)
+
+  PHASE 5 - Hoàn Thiện & Test (Tuần 6) - [HOÀN THÀNH]
+  --------------------------------------
+  [x] Responsive mobile (Tailwind)
+  [x] Seed dữ liệu mẫu đầy đủ
+  [x] Test toàn bộ luồng (đăng ký → đặt hàng → Zalo)
+  [x] Xử lý lỗi, loading state, empty state
+  [x] Code review + refactor
+  [x] Viết README hướng dẫn chạy local
+
+
+
+9. CẤU HÌNH LOCAL (application.properties)
+--------------------------------------------
+  spring.datasource.url=jdbc:mysql://localhost:3306/laptopweb
+  spring.datasource.username=root
+  spring.datasource.password=<YOUR_PASSWORD>
+  spring.jpa.hibernate.ddl-auto=update
+  spring.jpa.show-sql=true
+
+  jwt.secret=<SECRET_KEY>
+  jwt.expiration=86400000
+
+  # Upload ảnh
+  file.upload-dir=./uploads
+
+
+10. CỔNG CHẠY LOCAL
+---------------------
+  Backend  (Spring Boot) : http://localhost:8080
+  Frontend (Vue + Vite)  : http://localhost:5173
+  MySQL                  : localhost:3306 / DB: laptopweb
+
+
+================================================================
+  Ghi chú: Đây là plan dev LOCAL. Deploy sẽ xem xét sau.
+================================================================
