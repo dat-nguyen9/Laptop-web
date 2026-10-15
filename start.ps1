@@ -61,16 +61,37 @@ function Extract-Zip($zipPath, $destDir) {
 }
 
 function Test-Port($port) {
+    $tcp = $null
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient
         $connect = $tcp.BeginConnect("127.0.0.1", $port, $null, $null)
-        $success = $connect.AsyncWaitHandle.WaitOne(1500, $false)
-        if ($success) {
-            try { $tcp.EndConnect($connect) } catch {}
+        $signaled = $connect.AsyncWaitHandle.WaitOne(1500, $false)
+        if (-not $signaled) {
             $tcp.Close()
+            return $false
+        }
+        $tcp.EndConnect($connect)
+        $tcp.Close()
+        return $true
+    } catch {
+        if ($tcp) { try { $tcp.Close() } catch {} }
+        return $false
+    }
+}
+
+function Test-HttpServer($port) {
+    try {
+        $req = [System.Net.WebRequest]::Create("http://127.0.0.1:$port/")
+        $req.Timeout = 2000
+        $req.Method = "HEAD"
+        $res = $req.GetResponse()
+        $res.Close()
+        return $true
+    } catch [System.Net.WebException] {
+        if ($_.Response) {
+            $_.Response.Close()
             return $true
         }
-        $tcp.Close()
         return $false
     } catch {
         return $false
@@ -279,15 +300,18 @@ Write-Ok "Tim thay file chay: $jarFile ($jarSizeMB MB)"
 # ----------------------------------------------------------------
 Write-Step "Kiem tra cong 8080..."
 if (Test-Port 8080) {
-    Write-Ok "Ung dung da dang chay tren cong 8080!"
-    Write-Host ""
-    Write-Host ">>> DANG MO TRINH DUYET: http://localhost:8080 ..." -ForegroundColor Green
-    Open-Browser "http://localhost:8080"
-    Write-Host ""
-    Write-Host "He thong dang hoat dong. Dong cua so nay khi muon tat server." -ForegroundColor Cyan
-    try { Stop-Transcript | Out-Null } catch {}
-    # Giu cua so mo
-    while ($true) { Start-Sleep -Seconds 3600 }
+    if (Test-HttpServer 8080) {
+        Write-Ok "Ung dung da dang hoat dong tren cong 8080!"
+        Write-Host ""
+        Write-Host ">>> DANG MO TRINH DUYET: http://localhost:8080 ..." -ForegroundColor Green
+        Open-Browser "http://localhost:8080"
+        Write-Host ""
+        Write-Host "He thong dang hoat dong. Dong cua so nay khi muon tat server." -ForegroundColor Cyan
+        try { Stop-Transcript | Out-Null } catch {}
+        while ($true) { Start-Sleep -Seconds 3600 }
+    } else {
+        Write-WarnMsg "Cong 8080 dang mo nhung chua phan hoi HTTP hop le. Dang tiep tuc khoi dong..."
+    }
 }
 
 Write-Host ""
@@ -323,7 +347,7 @@ try {
 $appStarted = $false
 for ($i = 1; $i -le 60; $i++) {
     Start-Sleep -Seconds 1
-    if (Test-Port 8080) {
+    if (Test-Port 8080 -and (Test-HttpServer 8080)) {
         $appStarted = $true
         break
     }
