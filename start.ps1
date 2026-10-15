@@ -77,6 +77,24 @@ function Test-Port($port) {
     }
 }
 
+function Open-Browser($url) {
+    $browserPaths = @(
+        "${env:ProgramFiles}\Google\Chrome\Application\chrome.exe",
+        "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+        "${env:LocalAppData}\Google\Chrome\Application\chrome.exe",
+        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+        "${env:ProgramFiles}\Microsoft\Edge\Application\msedge.exe",
+        "${env:ProgramFiles}\Mozilla Firefox\firefox.exe"
+    )
+    foreach ($path in $browserPaths) {
+        if ($path -and (Test-Path $path)) {
+            Start-Process -FilePath $path -ArgumentList $url
+            return
+        }
+    }
+    Start-Process $url
+}
+
 # ----------------------------------------------------------------
 # BUOC 1: KIEM TRA & TAI JAVA (JRE 21)
 # ----------------------------------------------------------------
@@ -264,7 +282,7 @@ if (Test-Port 8080) {
     Write-Ok "Ung dung da dang chay tren cong 8080!"
     Write-Host ""
     Write-Host ">>> DANG MO TRINH DUYET: http://localhost:8080 ..." -ForegroundColor Green
-    Start-Process "http://localhost:8080"
+    Open-Browser "http://localhost:8080"
     Write-Host ""
     Write-Host "He thong dang hoat dong. Dong cua so nay khi muon tat server." -ForegroundColor Cyan
     try { Stop-Transcript | Out-Null } catch {}
@@ -326,7 +344,7 @@ if ($appStarted) {
     Write-Host " >>> HE THONG KHOI DONG THANH CONG! <<<" -ForegroundColor Green
     Write-Host " >>> DANG MO TRINH DUYET: http://localhost:8080" -ForegroundColor Green
     Write-Host "================================================================" -ForegroundColor Green
-    Start-Process "http://localhost:8080"
+    Open-Browser "http://localhost:8080"
     Write-Host ""
     Write-Host "De tat server: dong cua so CMD nay." -ForegroundColor Cyan
     try { Stop-Transcript | Out-Null } catch {}
