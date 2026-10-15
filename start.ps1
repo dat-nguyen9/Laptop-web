@@ -83,18 +83,26 @@ function Test-Port($port) {
 Write-Step "Kiem tra Java Runtime tren he thong..."
 $javaExe = $null
 
+function Test-JavaExe($exe) {
+    # java -fullversion in ra stdout (khac voi -version in ra stderr)
+    try {
+        $out = & $exe -fullversion 2>&1
+        if ("$out" -match "version") { return $true }
+    } catch {}
+    return $false
+}
+
 $portableJava = Join-Path $toolsDir "jre\bin\java.exe"
 if (Test-Path $portableJava) {
     $javaExe = $portableJava
     Write-Ok "Su dung Portable Java JRE tai tools\jre"
 } else {
-    try {
-        $javaOutput = & java -version 2>&1
-        if ($LASTEXITCODE -eq 0 -or ($javaOutput -match "version")) {
-            $javaExe = "java"
-            Write-Ok "Da tim thay Java he thong co san: $($javaOutput | Select-Object -First 1)"
-        }
-    } catch {
+    # Thu tim java tren PATH he thong
+    $sysJava = (Get-Command java -ErrorAction SilentlyContinue)
+    if ($sysJava) {
+        $javaExe = $sysJava.Source
+        Write-Ok "Da tim thay Java he thong: $javaExe"
+    } else {
         $javaExe = $null
         Write-WarnMsg "Khong tim thay java tren PATH he thong."
     }
@@ -133,15 +141,20 @@ if (-not $javaExe) {
     }
 }
 
-# Xac nhan java hoat dong
-try {
-    $javaVer = & $javaExe -version 2>&1
-    Write-Ok "Java version: $($javaVer | Select-Object -First 1)"
-} catch {
-    Write-Host "[LOI] File Java tim thay nhung khong chay duoc: $javaExe" -ForegroundColor Red
+# Xac nhan java co chay duoc khong (dung -fullversion)
+$javaVerOut = $null
+$ErrorActionPreference = "Continue"
+try { $javaVerOut = & $javaExe -fullversion 2>&1 } catch { $javaVerOut = $null }
+$ErrorActionPreference = "Stop"
+if ("$javaVerOut" -match "version") {
+    Write-Ok "Java version OK: $javaVerOut"
+} else {
+    Write-Host "[LOI] File Java khong chay duoc: $javaExe" -ForegroundColor Red
+    Write-Host "  Output: $javaVerOut" -ForegroundColor Yellow
     try { Stop-Transcript | Out-Null } catch {}
     exit 1
 }
+
 
 # ----------------------------------------------------------------
 # BUOC 2: KIEM TRA & KHOI CHAY DATABASE (MySQL / MariaDB)
