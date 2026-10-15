@@ -335,10 +335,12 @@ Write-Host ""
 # Khoi chay process Java va ghi log ra app.log de de debug
 Write-Host "Dang khoi chay May chu (Spring Boot)..." -ForegroundColor Yellow
 $appLog = Join-Path $baseDir "app.log"
+$appErrLog = Join-Path $baseDir "app_err.log"
 if (Test-Path $appLog) { Remove-Item -Force $appLog -ErrorAction SilentlyContinue }
+if (Test-Path $appErrLog) { Remove-Item -Force $appErrLog -ErrorAction SilentlyContinue }
 
 try {
-    $proc = Start-Process -FilePath $javaExe -ArgumentList "-jar `"$jarFile`"" -WorkingDirectory $baseDir -RedirectStandardOutput $appLog -RedirectStandardError $appLog -PassThru -NoNewWindow
+    $proc = Start-Process -FilePath $javaExe -ArgumentList "-jar `"$jarFile`"" -WorkingDirectory $baseDir -RedirectStandardOutput $appLog -RedirectStandardError $appErrLog -PassThru -NoNewWindow
     Write-Ok "May chu da bat dau (PID: $($proc.Id)). Dang cho cong 8080..."
 } catch {
     Write-Host "[LOI] Khong the khoi chay Java: $($_.Exception.Message)" -ForegroundColor Red
@@ -357,11 +359,17 @@ for ($i = 1; $i -le 60; $i++) {
     if ($proc.HasExited) {
         Write-Host ""
         Write-Host "[LOI] May chu da dung lai dot ngot! Ma thoat: $($proc.ExitCode)" -ForegroundColor Red
-        Write-Host "=================== NHAT KY LOI TU MAY CHU (app.log) ===================" -ForegroundColor Yellow
+        Write-Host "=================== NHAT KY LOI TU MAY CHU ===================" -ForegroundColor Yellow
+        if (Test-Path $appErrLog) {
+            $errContent = Get-Content $appErrLog -Tail 40
+            if ($errContent) {
+                Write-Host "--- Loi tu app_err.log: ---" -ForegroundColor Red
+                $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+            }
+        }
         if (Test-Path $appLog) {
-            Get-Content $appLog -Tail 40 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-        } else {
-            Write-Host "  (Khong tim thay file app.log)" -ForegroundColor Gray
+            Write-Host "--- Nhat ky tu app.log: ---" -ForegroundColor Cyan
+            Get-Content $appLog -Tail 30 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
         }
         Write-Host "========================================================================" -ForegroundColor Yellow
         break
@@ -387,9 +395,16 @@ if ($appStarted) {
 } else {
     Write-Host "================================================================" -ForegroundColor Red
     Write-Host " [THAT BAI] Khong the phat hien may chu web sau 60 giay!" -ForegroundColor Red
+    if (Test-Path $appErrLog) {
+        $errContent = Get-Content $appErrLog -Tail 25
+        if ($errContent) {
+            Write-Host "--- Loi tu app_err.log: ---" -ForegroundColor Red
+            $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+        }
+    }
     if (Test-Path $appLog) {
-        Write-Host "--- 25 DONG CUOI CUNG TRONG app.log: ---" -ForegroundColor Yellow
-        Get-Content $appLog -Tail 25 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+        Write-Host "--- Nhat ky tu app.log: ---" -ForegroundColor Cyan
+        Get-Content $appLog -Tail 25 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
     }
     Write-Host "================================================================" -ForegroundColor Red
     try { Stop-Transcript | Out-Null } catch {}
