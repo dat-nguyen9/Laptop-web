@@ -2,6 +2,7 @@ com\laptopweb\security\JwtUtils.class
 com\laptopweb\repository\UserRepository.class
 com\laptopweb\entity\Category.class
 com\laptopweb\security\WebSecurityConfig.class
+com\laptopweb\config\WebMvcConfig$1.class
 com\laptopweb\dto\JwtResponse.class
 com\laptopweb\dto\RegisterRequest.class
 com\laptopweb\config\WebMvcConfig.class
