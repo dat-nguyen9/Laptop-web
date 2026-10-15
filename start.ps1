@@ -4,14 +4,20 @@
 #  Ho tro Windows 10, 11, Windows Server 2012 R2, 2016, 2019, 2022
 # ================================================================
 
-# Bat dau ghi log ngay lap tuc
-$baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Xac dinh thu muc goc mot cach an toan
+$baseDir = $PSScriptRoot
+if (-not $baseDir -and $MyInvocation.MyCommand.Path) {
+    $baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+if (-not $baseDir) {
+    $baseDir = (Get-Location).Path
+}
+
+# Bat dau ghi log
 $logFile = Join-Path $baseDir "startup.log"
 try {
     Start-Transcript -Path $logFile -Append -Force | Out-Null
-} catch {
-    # Neu Start-Transcript that bai (PS co), bo qua
-}
+} catch {}
 
 Write-Host "=== HIEU TRAN LAPTOP US - Bat dau khoi dong ===" -ForegroundColor Cyan
 Write-Host "Thoi gian: $(Get-Date)" -ForegroundColor Gray
@@ -122,21 +128,11 @@ function Open-Browser($url) {
 Write-Step "Kiem tra Java Runtime tren he thong..."
 $javaExe = $null
 
-function Test-JavaExe($exe) {
-    # java -fullversion in ra stdout (khac voi -version in ra stderr)
-    try {
-        $out = & $exe -fullversion 2>&1
-        if ("$out" -match "version") { return $true }
-    } catch {}
-    return $false
-}
-
 $portableJava = Join-Path $toolsDir "jre\bin\java.exe"
 if (Test-Path $portableJava) {
     $javaExe = $portableJava
     Write-Ok "Su dung Portable Java JRE tai tools\jre"
 } else {
-    # Thu tim java tren PATH he thong
     $sysJava = (Get-Command java -ErrorAction SilentlyContinue)
     if ($sysJava) {
         $javaExe = $sysJava.Source
@@ -155,6 +151,7 @@ if (-not $javaExe) {
     
     try {
         $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "Mozilla/5.0")
         $wc.DownloadFile($jreUrl, $jreZip)
         Write-Ok "Tai xong Java. Dang giai nen..."
         
@@ -174,13 +171,12 @@ if (-not $javaExe) {
     } catch {
         Write-Host "`n[LOI] Khong the tai Java: $($_.Exception.Message)" -ForegroundColor Red
         Write-Host "  Vui long cai Java 21 thu cong tai: https://adoptium.net" -ForegroundColor Yellow
-        Write-Host "  Sau khi cai xong, chay lai chuong trinh nay." -ForegroundColor Yellow
         try { Stop-Transcript | Out-Null } catch {}
         exit 1
     }
 }
 
-# Xac nhan java co chay duoc khong (dung -fullversion)
+# Xac nhan java co chay duoc khong
 $javaVerOut = $null
 $ErrorActionPreference = "Continue"
 try { $javaVerOut = & $javaExe -fullversion 2>&1 } catch { $javaVerOut = $null }
@@ -189,16 +185,22 @@ if ("$javaVerOut" -match "version") {
     Write-Ok "Java version OK: $javaVerOut"
 } else {
     Write-Host "[LOI] File Java khong chay duoc: $javaExe" -ForegroundColor Red
-    Write-Host "  Output: $javaVerOut" -ForegroundColor Yellow
     try { Stop-Transcript | Out-Null } catch {}
     exit 1
 }
-
 
 # ----------------------------------------------------------------
 # BUOC 2: KIEM TRA & KHOI CHAY DATABASE (MySQL / MariaDB)
 # ----------------------------------------------------------------
 Write-Step "Kiem tra Database (MySQL / MariaDB tai cong 3306)..."
+
+# Kiem tra neu co Windows Service MySQL/MariaDB dang bi dung
+$mysqlService = Get-Service -Name "mysql*", "mariadb*" -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($mysqlService -and $mysqlService.Status -ne "Running") {
+    Write-Host "  Phat hien service $($mysqlService.DisplayName) dang tat. Dang bat lai..." -ForegroundColor Yellow
+    try { Start-Service $mysqlService.Name -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 } catch {}
+}
+
 $isDbOpen = Test-Port 3306
 
 if ($isDbOpen) {
@@ -209,12 +211,13 @@ if ($isDbOpen) {
     
     if (-not (Test-Path $mysqldExe)) {
         Write-WarnMsg "Cong 3306 chua co database. Dang tu dong tai Portable MariaDB 10.11 (khoang 85MB)..."
-        Write-Host "  Vui long doi, qua trinh nay co the mat vai phut..." -ForegroundColor Yellow
+        Write-Host "  Vui long doi mot vai phut de tai va giai nen MariaDB..." -ForegroundColor Yellow
         $mariaZip = Join-Path $toolsDir "mariadb.zip"
         $mariaUrl = "https://archive.mariadb.org/mariadb-10.11.8/winx64-packages/mariadb-10.11.8-winx64.zip"
         
         try {
             $wc = New-Object System.Net.WebClient
+            $wc.Headers.Add("User-Agent", "Mozilla/5.0")
             $wc.DownloadFile($mariaUrl, $mariaZip)
             Write-Ok "Tai xong MariaDB. Dang giai nen..."
             
@@ -232,7 +235,7 @@ if ($isDbOpen) {
             & $installDbExe --datadir="$mariadbDir\data" 2>&1 | Out-Null
         } catch {
             Write-Host "[LOI] Khong the tai MariaDB: $($_.Exception.Message)" -ForegroundColor Red
-            Write-WarnMsg "Vui long dam bao MySQL/MariaDB dang chay tren cong 3306 truoc khi chay lai!"
+            Write-WarnMsg "Neu may da co MySQL san, hay dam bao MySQL dang chay tren cong 3306!"
             try { Stop-Transcript | Out-Null } catch {}
             exit 1
         }
@@ -261,18 +264,24 @@ if ($isDbOpen) {
     if (Test-Port 3306) {
         Write-Ok "Portable MariaDB da khoi dong thanh cong tai cong 3306!"
         
-        # Tao database laptopweb neu chua co
+        # Thiet lap mat khau root thanh 123456 va tao database laptopweb
         $mariaClient = Join-Path $mariadbDir "bin\mariadb.exe"
         if (Test-Path $mariaClient) {
             try {
-                & $mariaClient -u root -e "CREATE DATABASE IF NOT EXISTS laptopweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1 | Out-Null
-                Write-Ok "Database 'laptopweb' da san sang."
+                & $mariaClient -u root -e "ALTER USER 'root'@'localhost' IDENTIFIED BY '123456'; FLUSH PRIVILEGES;" 2>&1 | Out-Null
+            } catch {}
+            try {
+                & $mariaClient -u root -p123456 -e "CREATE DATABASE IF NOT EXISTS laptopweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1 | Out-Null
+                Write-Ok "Database 'laptopweb' da san sang (root:123456)."
             } catch {
-                Write-WarnMsg "Khong tao duoc database tu dong, co the da ton tai."
+                try {
+                    & $mariaClient -u root -e "CREATE DATABASE IF NOT EXISTS laptopweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>&1 | Out-Null
+                    Write-Ok "Database 'laptopweb' da san sang."
+                } catch {}
             }
         }
     } else {
-        Write-WarnMsg "Khong the tu dong bat MariaDB sau 30 giay. Kiem tra MySQL/MariaDB tren may!"
+        Write-WarnMsg "Khong the tu dong bat MariaDB sau 30 giay. Kiem tra MySQL tren may!"
     }
 }
 
@@ -287,7 +296,6 @@ if (-not (Test-Path $jarFile)) {
 if (-not (Test-Path $jarFile)) {
     Write-Host "[LOI] Khong tim thay file app.jar de chay!" -ForegroundColor Red
     Write-Host "  Da kiem tra: $(Join-Path $baseDir 'app.jar')" -ForegroundColor Yellow
-    Write-Host "  Da kiem tra: $(Join-Path $baseDir 'backend\target\laptopweb-backend-0.0.1-SNAPSHOT.jar')" -ForegroundColor Yellow
     try { Stop-Transcript | Out-Null } catch {}
     exit 1
 }
@@ -324,18 +332,13 @@ Write-Host " Hotline  : 0778.3333.62" -ForegroundColor White
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
 
-# Khoi chay process Java
+# Khoi chay process Java va ghi log ra app.log de de debug
 Write-Host "Dang khoi chay May chu (Spring Boot)..." -ForegroundColor Yellow
+$appLog = Join-Path $baseDir "app.log"
+if (Test-Path $appLog) { Remove-Item -Force $appLog -ErrorAction SilentlyContinue }
+
 try {
-    $processInfo = New-Object System.Diagnostics.ProcessStartInfo
-    $processInfo.FileName = $javaExe
-    $processInfo.Arguments = "-jar `"$jarFile`""
-    $processInfo.WorkingDirectory = $baseDir
-    $processInfo.UseShellExecute = $false
-    $processInfo.RedirectStandardOutput = $false
-    $processInfo.RedirectStandardError = $false
-    
-    $proc = [System.Diagnostics.Process]::Start($processInfo)
+    $proc = Start-Process -FilePath $javaExe -ArgumentList "-jar `"$jarFile`"" -WorkingDirectory $baseDir -RedirectStandardOutput $appLog -RedirectStandardError $appLog -PassThru -NoNewWindow
     Write-Ok "May chu da bat dau (PID: $($proc.Id)). Dang cho cong 8080..."
 } catch {
     Write-Host "[LOI] Khong the khoi chay Java: $($_.Exception.Message)" -ForegroundColor Red
@@ -352,8 +355,15 @@ for ($i = 1; $i -le 60; $i++) {
         break
     }
     if ($proc.HasExited) {
-        Write-Host "[LOI] May chu da thoat dot ngot! Ma thoat: $($proc.ExitCode)" -ForegroundColor Red
-        Write-Host "  Kiem tra file startup.log de biet them chi tiet." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "[LOI] May chu da dung lai dot ngot! Ma thoat: $($proc.ExitCode)" -ForegroundColor Red
+        Write-Host "=================== NHAT KY LOI TU MAY CHU (app.log) ===================" -ForegroundColor Yellow
+        if (Test-Path $appLog) {
+            Get-Content $appLog -Tail 40 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+        } else {
+            Write-Host "  (Khong tim thay file app.log)" -ForegroundColor Gray
+        }
+        Write-Host "========================================================================" -ForegroundColor Yellow
         break
     }
     # Hien thi trang thai moi 5 giay
@@ -376,9 +386,11 @@ if ($appStarted) {
     $proc.WaitForExit()
 } else {
     Write-Host "================================================================" -ForegroundColor Red
-    Write-Host " [THAT BAI] Khong phat hien cong 8080 trong 60 giay!" -ForegroundColor Red
-    Write-Host " Hay thu mo thu cong: http://localhost:8080" -ForegroundColor Yellow
-    Write-Host " Xem file startup.log de biet them chi tiet." -ForegroundColor Yellow
+    Write-Host " [THAT BAI] Khong the phat hien may chu web sau 60 giay!" -ForegroundColor Red
+    if (Test-Path $appLog) {
+        Write-Host "--- 25 DONG CUOI CUNG TRONG app.log: ---" -ForegroundColor Yellow
+        Get-Content $appLog -Tail 25 | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+    }
     Write-Host "================================================================" -ForegroundColor Red
     try { Stop-Transcript | Out-Null } catch {}
     exit 1
