@@ -19,9 +19,12 @@ public class WebMvcConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Uploads static handler
         Path uploadDir = Paths.get("./uploads");
-        String uploadPath = uploadDir.toFile().getAbsolutePath();
+        String uploadPath = uploadDir.toFile().getAbsolutePath().replace("\\", "/");
+        if (!uploadPath.endsWith("/")) {
+            uploadPath += "/";
+        }
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadPath + "/");
+                .addResourceLocations("file:" + uploadPath);
 
         // Dist static handler if frontend/dist exists
         File distDir = new File("./frontend/dist");
@@ -33,22 +36,14 @@ public class WebMvcConfig implements WebMvcConfigurer {
         }
 
         if (distDir.exists()) {
-            String distPath = distDir.getAbsolutePath();
-            final File finalDistDir = distDir;
+            String distPath = distDir.getAbsolutePath().replace("\\", "/");
+            if (!distPath.endsWith("/")) {
+                distPath += "/";
+            }
             registry.addResourceHandler("/**")
-                    .addResourceLocations("file:" + distPath + "/")
-                    .resourceChain(true)
-                    .addResolver(new PathResourceResolver() {
-                        @Override
-                        protected Resource getResource(String resourcePath, Resource location) throws IOException {
-                            Resource requestedResource = location.createRelative(resourcePath);
-                            if (requestedResource.exists() && requestedResource.isReadable()) {
-                                return requestedResource;
-                            }
-                            return new FileSystemResource(new File(finalDistDir, "index.html"));
-                        }
-                    });
+                    .addResourceLocations("file:" + distPath);
         }
+
     }
 }
 

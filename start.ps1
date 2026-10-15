@@ -36,10 +36,10 @@ function Extract-Zip($zipPath, $destDir) {
     [System.IO.Compression.ZipFile]::ExtractToDirectory($zipPath, $destDir)
 }
 
-function Test-Port3306 {
+function Test-Port($port) {
     try {
         $tcp = New-Object System.Net.Sockets.TcpClient
-        $connect = $tcp.BeginConnect("127.0.0.1", 3306, $null, $null)
+        $connect = $tcp.BeginConnect("127.0.0.1", $port, $null, $null)
         $success = $connect.AsyncWaitHandle.WaitOne(1500, $false)
         if ($success) {
             $tcp.EndConnect($connect)
@@ -59,54 +59,54 @@ function Test-Port3306 {
 Write-Step "Kiem tra Java Runtime tren he thong..."
 $javaExe = $null
 
-try {
-    $ver = & java -version 2>&1
-    if ($LASTEXITCODE -eq 0 -or $ver) {
-        $javaExe = "java"
-        Write-Ok "Da tim thay Java he thong co san."
+$portableJava = Join-Path $toolsDir "jre\bin\java.exe"
+if (Test-Path $portableJava) {
+    $javaExe = $portableJava
+    Write-Ok "Su dung Portable Java JRE tai tools\jre"
+} else {
+    try {
+        $ver = & java -version 2>&1
+        if ($LASTEXITCODE -eq 0 -or $ver) {
+            $javaExe = "java"
+            Write-Ok "Da tim thay Java he thong co san."
+        }
+    } catch {
+        $javaExe = $null
     }
-} catch {
-    $javaExe = $null
 }
 
-$portableJava = Join-Path $toolsDir "jre\bin\java.exe"
 if (-not $javaExe) {
-    if (Test-Path $portableJava) {
-        $javaExe = $portableJava
-        Write-Ok "Su dung Portable Java JRE co san tai tools\jre"
-    } else {
-        Write-WarnMsg "He thong chua co Java. Dang tu dong tai Portable OpenJDK 21 (khoang 49MB)..."
-        $jreZip = Join-Path $toolsDir "jre21.zip"
-        $jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.3%2B9/OpenJDK21U-jre_x64_windows_hotspot_21.0.3_9.zip"
-        
-        $wc = New-Object System.Net.WebClient
-        $wc.DownloadFile($jreUrl, $jreZip)
-        Write-Ok "Tai xong Java. Dang giai nen..."
-        
-        $extractDir = Join-Path $toolsDir "jre_temp"
-        if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
-        Extract-Zip $jreZip $extractDir
-        
-        $subFolder = Get-ChildItem -Directory -Path $extractDir | Select-Object -First 1
-        $targetJre = Join-Path $toolsDir "jre"
-        if (Test-Path $targetJre) { Remove-Item -Recurse -Force $targetJre }
-        Move-Item $subFolder.FullName $targetJre
-        Remove-Item -Recurse -Force $extractDir
-        Remove-Item -Force $jreZip
-        
-        $javaExe = $portableJava
-        Write-Ok "Cai dat Portable Java 21 thanh cong!"
-    }
+    Write-WarnMsg "He thong chua co Java. Dang tu dong tai Portable OpenJDK 21 (khoang 49MB)..."
+    $jreZip = Join-Path $toolsDir "jre21.zip"
+    $jreUrl = "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.3%2B9/OpenJDK21U-jre_x64_windows_hotspot_21.0.3_9.zip"
+    
+    $wc = New-Object System.Net.WebClient
+    $wc.DownloadFile($jreUrl, $jreZip)
+    Write-Ok "Tai xong Java. Dang giai nen..."
+    
+    $extractDir = Join-Path $toolsDir "jre_temp"
+    if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
+    Extract-Zip $jreZip $extractDir
+    
+    $subFolder = Get-ChildItem -Directory -Path $extractDir | Select-Object -First 1
+    $targetJre = Join-Path $toolsDir "jre"
+    if (Test-Path $targetJre) { Remove-Item -Recurse -Force $targetJre }
+    Move-Item $subFolder.FullName $targetJre
+    Remove-Item -Recurse -Force $extractDir
+    Remove-Item -Force $jreZip
+    
+    $javaExe = $portableJava
+    Write-Ok "Cai dat Portable Java 21 thanh cong!"
 }
 
 # ----------------------------------------------------------------
 # BƯỚC 2: KIỂM TRA & KHỞI CHẠY DATABASE (MySQL / MariaDB)
 # ----------------------------------------------------------------
 Write-Step "Kiem tra Database (MySQL / MariaDB tai cong 3306)..."
-$isPortOpen = Test-Port3306
+$isDbOpen = Test-Port 3306
 
-if ($isPortOpen) {
-    Write-Ok "Cong 3306 da san sang (MySQL dang chay)."
+if ($isDbOpen) {
+    Write-Ok "Cong 3306 da san sang (MySQL/MariaDB dang hoat dong)."
 } else {
     $mariadbDir = Join-Path $toolsDir "mariadb"
     $mysqldExe = Join-Path $mariadbDir "bin\mysqld.exe"
@@ -139,12 +139,12 @@ if ($isPortOpen) {
     
     # Cho cong 3306 khoi dong
     $retries = 20
-    while (-not (Test-Port3306) -and $retries -gt 0) {
+    while (-not (Test-Port 3306) -and $retries -gt 0) {
         Start-Sleep -Seconds 1
         $retries--
     }
     
-    if (Test-Port3306) {
+    if (Test-Port 3306) {
         Write-Ok "Portable MariaDB da khoi dong thanh cong tai cong 3306!"
         
         # Tao database laptopweb neu chua co
@@ -153,7 +153,7 @@ if ($isPortOpen) {
             & $mariaClient -u root -e "CREATE DATABASE IF NOT EXISTS laptopweb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;" 2>$null
         }
     } else {
-        Write-WarnMsg "Khong the tu dong bat MariaDB. Neu ban co MySQL san, hay dam bao MySQL dang Start!"
+        Write-WarnMsg "Khong the tu dong bat MariaDB. Neu ban co MySQL san, hay dam bao MySQL dang chay!"
     }
 }
 
@@ -166,28 +166,61 @@ if (-not (Test-Path $jarFile)) {
     $jarFile = Join-Path $baseDir "backend\target\laptopweb-backend-0.0.1-SNAPSHOT.jar"
 }
 if (-not (Test-Path $jarFile)) {
-    Write-Host "[LOI] Khong tim thay file JAR de chay!" -ForegroundColor Red
-    Write-Host "Vui long dam bao file app.jar hoac backend/target/laptopweb-backend-0.0.1-SNAPSHOT.jar ton tai." -ForegroundColor Yellow
+    Write-Host "[LOI] Khong tim thay file app.jar de chay!" -ForegroundColor Red
     exit 1
 }
 
 Write-Ok "Tim thay file chay: $jarFile"
 
 # ----------------------------------------------------------------
-# BƯỚC 4: KHỞI CHẠY WEBSITE HIEU TRAN LAPTOP US
+# BƯỚC 4: KIỂM TRA CỔNG 8080 VÀ KHỞI CHẠY HỆ THỐNG
 # ----------------------------------------------------------------
+if (Test-Port 8080) {
+    Write-Ok "Ung dung da dang chay tren cong 8080!"
+    Write-Host "`n>>> DANG MO TRINH DUYET: http://localhost:8080 ..." -ForegroundColor Green
+    Start-Process "http://localhost:8080"
+    Write-Host "`nHe thong dang hoat dong. Dong cua so nay khi muon tat server.`n"
+    while ($true) { Start-Sleep -Seconds 3600 }
+}
+
 Write-Host "`n================================================================" -ForegroundColor Green
-Write-Host " HE THONG DA SAN SANG! DANG KHOI CHAY HIẾU TRẦN LAPTOP US..." -ForegroundColor Green
+Write-Host " DANG KHOI CHAY HIẾU TRẦN LAPTOP US..." -ForegroundColor Green
 Write-Host " Website: http://localhost:8080" -ForegroundColor White
 Write-Host " Quan tri: http://localhost:8080/admin (admin@laptopweb.com / admin123)" -ForegroundColor White
 Write-Host " Hotline: 0778.3333.62" -ForegroundColor White
 Write-Host "================================================================`n" -ForegroundColor Green
 
-# Tu dong mo trinh duyet sau 6 giay khi Spring Boot khoi dong
-$job = Start-Job -ScriptBlock {
-    Start-Sleep -Seconds 7
-    Start-Process "http://localhost:8080"
+# Khoi chay process Java ngam trong background va theo doi
+$processInfo = New-Object System.Diagnostics.ProcessStartInfo
+$processInfo.FileName = $javaExe
+$processInfo.Arguments = "-jar `"$jarFile`""
+$processInfo.WorkingDirectory = $baseDir
+$processInfo.UseShellExecute = $false
+$processInfo.RedirectStandardOutput = $false
+$processInfo.RedirectStandardError = $false
+
+$proc = [System.Diagnostics.Process]::Start($processInfo)
+
+Write-Host "Dang doi may chu khoi dong tren cong 8080 de tu dong mo trinh duyet..." -ForegroundColor Yellow
+$appStarted = $false
+for ($i = 0; $i -lt 45; $i++) {
+    Start-Sleep -Seconds 1
+    if (Test-Port 8080) {
+        $appStarted = $true
+        break
+    }
+    if ($proc.HasExited) {
+        break
+    }
 }
 
-# Chay Spring Boot Backend (tich hop san Vue 3 Frontend)
-& $javaExe -jar $jarFile
+if ($appStarted) {
+    Write-Host "`n>>> HE THONG KHOI DONG THANH CONG!" -ForegroundColor Green
+    Write-Host ">>> DANG MO TRINH DUYET: http://localhost:8080 ..." -ForegroundColor Green
+    Start-Process "http://localhost:8080"
+} else {
+    Write-WarnMsg "Khong the phat hien cong 8080 trong 45 giay. Hay thu mo thu cong http://localhost:8080"
+}
+
+# Cho tien trinh Java chay
+$proc.WaitForExit()

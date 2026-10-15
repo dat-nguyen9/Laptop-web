@@ -2,7 +2,6 @@ com\laptopweb\security\JwtUtils.class
 com\laptopweb\repository\UserRepository.class
 com\laptopweb\entity\Category.class
 com\laptopweb\security\WebSecurityConfig.class
-com\laptopweb\config\WebMvcConfig$1.class
 com\laptopweb\dto\JwtResponse.class
 com\laptopweb\dto\RegisterRequest.class
 com\laptopweb\config\WebMvcConfig.class
@@ -17,6 +16,7 @@ com\laptopweb\repository\OrderItemRepository.class
 com\laptopweb\security\AuthEntryPointJwt.class
 com\laptopweb\controller\OrderController.class
 com\laptopweb\security\UserDetailsServiceImpl.class
+com\laptopweb\controller\SpaController.class
 com\laptopweb\security\UserDetailsImpl.class
 com\laptopweb\controller\AdminController.class
 com\laptopweb\entity\OrderStatus.class

@@ -1,10 +1,10 @@
 @echo off
-title Hieu Tran Laptop US - Auto Setup & Run
+title Hieu Tran Laptop US - Auto Setup and Run
 chcp 65001 >nul
 cls
 
 echo ================================================================
-echo    HIEU TRAN LAPTOP US - AUTO SETUP & RUN (1-CLICK)
+echo    HIEU TRAN LAPTOP US - AUTO SETUP AND RUN (1-CLICK)
 echo ================================================================
 echo Dang kiem tra moi truong va khoi dong he thong...
 echo Vui long giu nguyen cua so nay!

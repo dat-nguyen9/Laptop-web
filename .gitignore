@@ -1,0 +1,14 @@
+# Tools and downloaded runtime binaries
+tools/
+*.zip
+*.tar
+temp_deploy/
+temp_package/
+
+# Logs
+*.log
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
