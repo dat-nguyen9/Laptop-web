@@ -332,31 +332,97 @@ Write-Host " Hotline  : 0778.3333.62" -ForegroundColor White
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host ""
 
-# Khoi chay process Java va ghi log ra app.log de de debug
-Write-Host "Dang khoi chay May chu (Spring Boot)..." -ForegroundColor Yellow
-$appLog = Join-Path $baseDir "app.log"
-$appErrLog = Join-Path $baseDir "app_err.log"
-if (Test-Path $appLog) { Remove-Item -Force $appLog -ErrorAction SilentlyContinue }
-if (Test-Path $appErrLog) { Remove-Item -Force $appErrLog -ErrorAction SilentlyContinue }
+$configFile = Join-Path $baseDir "db-config.txt"
 
-try {
-    $proc = Start-Process -FilePath $javaExe -ArgumentList "-jar `"$jarFile`"" -WorkingDirectory $baseDir -RedirectStandardOutput $appLog -RedirectStandardError $appErrLog -PassThru -NoNewWindow
-    Write-Ok "May chu da bat dau (PID: $($proc.Id)). Dang cho cong 8080..."
-} catch {
-    Write-Host "[LOI] Khong the khoi chay Java: $($_.Exception.Message)" -ForegroundColor Red
-    try { Stop-Transcript | Out-Null } catch {}
-    exit 1
+# Ham doc cau hinh MySQL tu db-config.txt
+function Get-DbConfig {
+    $cfg = @{ User = "root"; Pass = "123456" }
+    if (Test-Path $configFile) {
+        Get-Content $configFile | ForEach-Object {
+            if ($_ -match "^\s*DB_USER\s*=\s*(.*)$") { $cfg.User = $matches[1].Trim() }
+            if ($_ -match "^\s*DB_PASSWORD\s*=\s*(.*)$") { $cfg.Pass = $matches[1].Trim() }
+            if ($_ -match "^\s*DB_PASS\s*=\s*(.*)$") { $cfg.Pass = $matches[1].Trim() }
+        }
+    }
+    return $cfg
 }
 
-# Doi Spring Boot khoi dong xong
+$dbConfig = Get-DbConfig
+Write-Ok "Cau hinh MySQL: User '$($dbConfig.User)' (Mat khau doc tu db-config.txt)"
+
+$appLog = Join-Path $baseDir "app.log"
+$appErrLog = Join-Path $baseDir "app_err.log"
+
 $appStarted = $false
-for ($i = 1; $i -le 60; $i++) {
-    Start-Sleep -Seconds 1
-    if (Test-Port 8080 -and (Test-HttpServer 8080)) {
-        $appStarted = $true
+$maxAttempts = 3
+
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    Write-Host "`nDang khoi chay May chu (Spring Boot) - Lan thu $attempt/$maxAttempts..." -ForegroundColor Yellow
+    
+    if (Test-Path $appLog) { Remove-Item -Force $appLog -ErrorAction SilentlyContinue }
+    if (Test-Path $appErrLog) { Remove-Item -Force $appErrLog -ErrorAction SilentlyContinue }
+    
+    $argsList = "-jar `"$jarFile`" --spring.datasource.username=`"$($dbConfig.User)`" --spring.datasource.password=`"$($dbConfig.Pass)`""
+    
+    try {
+        $proc = Start-Process -FilePath $javaExe -ArgumentList $argsList -WorkingDirectory $baseDir -RedirectStandardOutput $appLog -RedirectStandardError $appErrLog -PassThru -NoNewWindow
+        Write-Ok "May chu da bat dau (PID: $($proc.Id)). Dang cho cong 8080..."
+    } catch {
+        Write-Host "[LOI] Khong the khoi chay Java: $($_.Exception.Message)" -ForegroundColor Red
+        try { Stop-Transcript | Out-Null } catch {}
+        exit 1
+    }
+    
+    # Cho may chu khoi dong
+    for ($i = 1; $i -le 60; $i++) {
+        Start-Sleep -Seconds 1
+        if (Test-Port 8080 -and (Test-HttpServer 8080)) {
+            $appStarted = $true
+            break
+        }
+        if ($proc.HasExited) {
+            break
+        }
+        if ($i % 5 -eq 0) {
+            Write-Host "  ...Dang khoi dong ($i/60 giay)..." -ForegroundColor Gray
+        }
+    }
+    
+    if ($appStarted) {
         break
     }
-    if ($proc.HasExited) {
+    
+    # Kiem tra neu loi do sai mat khau MySQL
+    $logRaw = ""
+    if (Test-Path $appLog) { try { $logRaw += (Get-Content $appLog -Raw) } catch {} }
+    if (Test-Path $appErrLog) { try { $logRaw += (Get-Content $appErrLog -Raw) } catch {} }
+    
+    $isAccessDenied = ($logRaw -match "Access denied for user")
+    
+    if ($isAccessDenied) {
+        Write-Host ""
+        Write-Host "================================================================" -ForegroundColor Red
+        Write-Host " [LOI DANG NHAP DATABASE] MySQL tren VPS tu choi mat khau!" -ForegroundColor Yellow
+        Write-Host " Mat khau vua thu: '$($dbConfig.Pass)'" -ForegroundColor Yellow
+        Write-Host "================================================================" -ForegroundColor Red
+        Write-Host "Vui long nhap mat khau root MySQL dung cua ban tren VPS nay." -ForegroundColor Cyan
+        Write-Host "(Neu MySQL cua ban KHONG CO mat khau, hay nhan Enter de trong):" -ForegroundColor Cyan
+        
+        $newPass = Read-Host ">> Nhap mat khau MySQL"
+        
+        # Luu lai vao db-config.txt
+        $newCfgContent = @"
+# CAU HINH DATABASE CHO HIEU TRAN LAPTOP US
+DB_USER=$($dbConfig.User)
+DB_PASSWORD=$newPass
+"@
+        Set-Content -Path $configFile -Value $newCfgContent -Encoding UTF8
+        
+        Write-Ok "Da luu mat khau moi vao db-config.txt. Dang thu lai..."
+        $dbConfig = Get-DbConfig
+        continue
+    } else {
+        # Loi khac, in log va thoat
         Write-Host ""
         Write-Host "[LOI] May chu da dung lai dot ngot! Ma thoat: $($proc.ExitCode)" -ForegroundColor Red
         Write-Host "=================== NHAT KY LOI TU MAY CHU ===================" -ForegroundColor Yellow
@@ -374,10 +440,6 @@ for ($i = 1; $i -le 60; $i++) {
         Write-Host "========================================================================" -ForegroundColor Yellow
         break
     }
-    # Hien thi trang thai moi 5 giay
-    if ($i % 5 -eq 0) {
-        Write-Host "  ...Dang khoi dong ($i/60 giay)..." -ForegroundColor Gray
-    }
 }
 
 Write-Host ""
@@ -390,22 +452,11 @@ if ($appStarted) {
     Write-Host ""
     Write-Host "De tat server: dong cua so CMD nay." -ForegroundColor Cyan
     try { Stop-Transcript | Out-Null } catch {}
-    # Giu cua so mo va doi java thoat
     $proc.WaitForExit()
 } else {
     Write-Host "================================================================" -ForegroundColor Red
-    Write-Host " [THAT BAI] Khong the phat hien may chu web sau 60 giay!" -ForegroundColor Red
-    if (Test-Path $appErrLog) {
-        $errContent = Get-Content $appErrLog -Tail 25
-        if ($errContent) {
-            Write-Host "--- Loi tu app_err.log: ---" -ForegroundColor Red
-            $errContent | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-        }
-    }
-    if (Test-Path $appLog) {
-        Write-Host "--- Nhat ky tu app.log: ---" -ForegroundColor Cyan
-        Get-Content $appLog -Tail 25 | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
-    }
+    Write-Host " [THAT BAI] Khong the khoi dong may chu web!" -ForegroundColor Red
+    Write-Host " Kiem tra file startup.log va app.log de biet chi tiet." -ForegroundColor Yellow
     Write-Host "================================================================" -ForegroundColor Red
     try { Stop-Transcript | Out-Null } catch {}
     exit 1

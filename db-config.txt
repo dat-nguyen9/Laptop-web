@@ -1,0 +1,5 @@
+# CAU HINH DATABASE CHO HIEU TRAN LAPTOP US
+# Mac dinh: root / 123456
+# Neu MySQL tren VPS cua ban dung mat khau khac hoac de trong (khong co mat khau), ban co the sua o day:
+DB_USER=root
+DB_PASSWORD=123456
